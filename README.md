@@ -27,7 +27,7 @@ Requires Node.js 20 or newer (developed against 24 LTS).
 | `npm start` | Serve the production build |
 | `npm run lint` | ESLint, including `jsx-a11y` rules |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest unit tests (74) |
+| `npm test` | Vitest unit tests (82) |
 | `npm run test:e2e` | Playwright e2e, desktop + mobile (151) |
 
 ---
@@ -188,7 +188,7 @@ Per-page titles and meta descriptions, Open Graph and Twitter cards, `Organizati
 
 Cart, checkout, wishlist and search are `noindex`. Filtered `/shop` permutations are `noindex,follow` to avoid near-duplicates while letting crawlers reach the products. Unknown product and category URLs return a real 404 status, not a soft 404.
 
-Set `NEXT_PUBLIC_SITE_URL` before deploying or canonical URLs and OG tags will point at localhost.
+Set `NEXT_PUBLIC_SITE_URL` to your domain so canonical URLs and OG tags are right. If it is missing or blank, `config/site-url.ts` falls back to Vercel's deployment URL and then to localhost — it never returns a value `new URL()` would reject, because `metadataBase` passes it straight to that constructor and an invalid one fails the whole production build.
 
 ## Performance
 
@@ -207,7 +207,7 @@ npm test          # 74 unit tests
 npm run test:e2e  # 151 e2e tests, desktop + mobile viewports
 ```
 
-Unit tests cover the parts where a silent error costs money: cart arithmetic, discount and shipping rules, the filter/facet engine, search scoring, URL-state round-tripping, form validation, and catalogue integrity (unique slugs, alt text present, variant counts, inventory matching its variants).
+Unit tests cover the parts where a silent error costs money: site-URL resolution (which can break the production build), cart arithmetic, discount and shipping rules, the filter/facet engine, search scoring, URL-state round-tripping, form validation, and catalogue integrity (unique slugs, alt text present, variant counts, inventory matching its variants).
 
 E2E covers the journeys, on both a desktop and a Pixel 7 viewport: browsing, filtering through the real sidebar and mobile drawer, sorting, load-more, product variant selection with sold-out states, add to cart, quick view, cart maths and persistence, wishlist, search overlay and results page, the full checkout including validation failures and the unpaid-order confirmation, plus the accessibility and SEO assertions listed above.
 
@@ -245,4 +245,15 @@ The data model already carries what an admin dashboard needs: `status` (`active`
 
 ## Deployment
 
-Vercel is the zero-config path: push the repo, set `NEXT_PUBLIC_SITE_URL`, deploy. `npm run build && npm start` works anywhere Node 20+ runs.
+Vercel is the zero-config path: push the repo and deploy. `npm run build && npm start` works anywhere Node 20+ runs.
+
+Set `NEXT_PUBLIC_SITE_URL` to your production domain once you have one. Until then the site resolves its own URL from Vercel's environment, so a deploy without it still produces correct absolute URLs for that deployment.
+
+**One trap, already fixed:** an environment variable that *exists but is empty* is not the same as a missing one. `process.env.X ?? fallback` does not catch `""`, which is how the first deploy of this project failed with:
+
+```
+Failed to collect configuration for /_not-found
+TypeError: Invalid URL … input: ''
+```
+
+`config/site-url.ts` now treats blank as missing, accepts the bare host Vercel supplies, and validates before returning. `tests/unit/site-url.test.ts` covers it.

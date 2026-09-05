@@ -1,3 +1,4 @@
+import { resolveSiteUrl } from "./site-url";
 import type { CurrencyCode } from "@/types";
 
 /**
@@ -10,7 +11,8 @@ export const siteConfig = {
   tagline: "Style That Defines You",
   description:
     "Snow Fashion is a modern fashion label offering stylish, high-quality clothing — designed for effortless style and everyday confidence.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  /** Always a valid origin — see config/site-url.ts for why that matters. */
+  url: resolveSiteUrl(),
   locale: "en-US",
   currency: "USD" as CurrencyCode,
 

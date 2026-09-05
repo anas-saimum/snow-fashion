@@ -105,12 +105,17 @@ test.describe("cart", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveAttribute("aria-modal", "true");
 
-    // Focus must have moved inside the dialog.
-    const focusInside = await page.evaluate(() => {
-      const dialog = document.querySelector('[role="dialog"]');
-      return dialog?.contains(document.activeElement) ?? false;
-    });
-    expect(focusInside).toBe(true);
+    // Focus moves in asynchronously (the trap waits a tick so it does not
+    // steal the caret from an autofocused field), so poll rather than
+    // sampling once.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const dialog = document.querySelector('[role="dialog"]');
+          return dialog?.contains(document.activeElement) ?? false;
+        }),
+      )
+      .toBe(true);
 
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
