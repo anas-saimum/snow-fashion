@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/Button";
+import { StorefrontChrome } from "@/components/layout/StorefrontChrome";
 
 export const metadata: Metadata = {
   title: "Page not found",
-  robots: { index: false, follow: true },
+  // No robots directive here: Next adds noindex to not-found responses itself,
+  // and setting it again produced two <meta name="robots"> tags.
 };
 
 const suggestions = [
@@ -18,7 +20,8 @@ const suggestions = [
 
 export default function NotFound() {
   return (
-    <div className="u-container flex min-h-[60vh] flex-col items-center justify-center py-24 text-center">
+    <StorefrontChrome>
+      <div className="u-container flex min-h-[60vh] flex-col items-center justify-center py-24 text-center">
       <p className="u-eyebrow">Error 404</p>
 
       <h1 className="mt-4 text-h1">This page has moved on</h1>
@@ -49,6 +52,7 @@ export default function NotFound() {
           ))}
         </ul>
       </nav>
-    </div>
+      </div>
+    </StorefrontChrome>
   );
 }

@@ -12,7 +12,7 @@ const socials = [
   { key: "tiktok", label: "TikTok", Icon: Music2, ...siteConfig.social.tiktok },
 ];
 
-export function Footer() {
+export function Footer({ logoUrl }: { logoUrl?: string }) {
   return (
     <footer className="border-t border-stone bg-paper">
       <Newsletter />
@@ -21,7 +21,7 @@ export function Footer() {
         <div className="grid gap-12 lg:grid-cols-[1.4fr_repeat(4,1fr)] lg:gap-8">
           {/* Brand block */}
           <div className="max-w-xs">
-            <Logo size="md" />
+            <Logo size="md" logoUrl={logoUrl} />
             <p className="mt-5 text-caption leading-relaxed text-muted">
               {siteConfig.description}
             </p>

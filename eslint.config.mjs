@@ -12,6 +12,7 @@ const config = [
     // Generated or third-party output — not ours to lint.
     ignores: [
       ".next/**",
+      ".next-dev/**",
       "node_modules/**",
       "out/**",
       "coverage/**",

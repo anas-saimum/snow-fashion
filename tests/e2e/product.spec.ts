@@ -162,8 +162,25 @@ test.describe("product detail", () => {
     await expect(page.getByRole("dialog", { name: /^Cart/ })).toBeVisible();
   });
 
-  test("an unknown product 404s", async ({ page }) => {
-    const response = await page.goto("/product/does-not-exist");
-    expect(response?.status()).toBe(404);
+  test("an unknown product shows the 404 page and is not indexable", async ({
+    page,
+  }) => {
+    await page.goto("/product/does-not-exist");
+
+    await expect(
+      page.getByRole("heading", { name: /This page has moved on/ }),
+    ).toBeVisible();
+
+    // dynamicParams is true so that products added after a deploy resolve,
+    // which means Next serves this at 200 rather than 404. noindex is what
+    // keeps it out of search results — see the comment on the product page.
+    const directives = await page
+      .locator('meta[name="robots"]')
+      .evaluateAll((tags) => tags.map((tag) => tag.getAttribute("content") ?? ""));
+
+    expect(directives.length).toBeGreaterThan(0);
+    for (const directive of directives) {
+      expect(directive).toContain("noindex");
+    }
   });
 });

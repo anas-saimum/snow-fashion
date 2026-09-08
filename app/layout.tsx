@@ -2,15 +2,17 @@ import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { MobileNav } from "@/components/layout/MobileNav";
-import { CartDrawer } from "@/components/cart/CartDrawer";
-import { SearchOverlay } from "@/components/search/SearchOverlay";
 import { Toaster } from "@/components/ui/Toaster";
 import { siteConfig } from "@/config/site.config";
-import { organizationSchema, websiteSchema } from "@/lib/structured-data";
 import { OG_IMAGE, absoluteUrl } from "@/lib/seo";
+
+/**
+ * Root layout: document shell only.
+ *
+ * The storefront chrome (header, footer, overlays) lives in
+ * app/(shop)/layout.tsx, and the admin has its own in app/admin/layout.tsx,
+ * so the dashboard does not inherit a shop header and cart drawer.
+ */
 
 /* Two faces only. Self-hosted by next/font, so no layout shift and no
    third-party request at runtime. */
@@ -90,33 +92,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable + " " + cormorant.variable}>
       <body className="flex min-h-dvh flex-col bg-paper antialiased">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-90 focus:bg-ink focus:px-5 focus:py-3 focus:text-micro focus:uppercase focus:tracking-[0.12em] focus:text-paper"
-        >
-          Skip to content
-        </a>
-
-        <Header />
-
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-
-        <Footer />
-
-        {/* Global overlays */}
-        <MobileNav />
-        <CartDrawer />
-        <SearchOverlay />
+        {children}
         <Toaster />
-
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify([organizationSchema(), websiteSchema()]),
-          }}
-        />
       </body>
     </html>
   );

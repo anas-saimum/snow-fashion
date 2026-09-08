@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *   mobile  — hamburger | wordmark | search + cart
  *   desktop — wordmark | nav | search + wishlist + cart + account
  */
-export function Header() {
+export function Header({ logoUrl }: { logoUrl?: string }) {
   const toggleMobileNav = useUIStore((s) => s.toggleMobileNav);
   const [scrolled, setScrolled] = useState(false);
 
@@ -49,12 +49,12 @@ export function Header() {
               <Menu className="size-5" aria-hidden="true" />
             </button>
 
-            <Logo className="hidden lg:block" size="md" />
+            <Logo className="hidden lg:block" size="md" logoUrl={logoUrl} />
           </div>
 
           {/* Centre — wordmark on mobile, nav on desktop */}
           <div className="flex items-center justify-center lg:flex-1">
-            <Logo className="block lg:hidden" size="sm" />
+            <Logo className="block lg:hidden" size="sm" logoUrl={logoUrl} />
             <DesktopNav />
           </div>
 

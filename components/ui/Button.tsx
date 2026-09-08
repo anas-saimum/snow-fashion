@@ -9,7 +9,9 @@ export type ButtonVariant =
   | "link"
   | "quiet"
   /** For placing on dark photography — never build this by overriding classes. */
-  | "inverse";
+  | "inverse"
+  /** Destructive confirmation, e.g. deleting a product. */
+  | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 /**
@@ -37,6 +39,8 @@ const variants: Record<ButtonVariant, string> = {
   inverse:
     "bg-paper text-ink border border-paper hover:bg-paper/85 hover:border-paper/85 " +
     "focus-visible:outline-paper",
+  danger:
+    "bg-error text-paper border border-error hover:bg-error/85 hover:border-error/85",
 };
 
 const sizes: Record<ButtonSize, string> = {

@@ -1,11 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = 3100;
-const BASE_URL = "http://127.0.0.1:" + PORT;
+const SHOP_PORT = 3100;
+const ADMIN_PORT = 3101;
+const SHOP_URL = "http://127.0.0.1:" + SHOP_PORT;
+const ADMIN_URL = "http://127.0.0.1:" + ADMIN_PORT;
+
+const next = "node node_modules/next/dist/bin/next";
 
 /**
- * E2E runs against a production build on its own port, so it never collides
- * with a dev server and it exercises the same output that ships.
+ * Two servers, because the two halves live in different habitats.
+ *
+ * The storefront is tested against a production build, so tests exercise the
+ * same output that ships. The admin is tested against a dev server, because
+ * its in-memory backend is a development-only mode by design — in production
+ * without Supabase the dashboard correctly refuses to load at all.
  */
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -16,30 +24,53 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 10_000 },
 
-  use: {
-    baseURL: BASE_URL,
-    trace: "retain-on-failure",
-  },
+  use: { trace: "retain-on-failure" },
 
   projects: [
     {
       name: "desktop-chromium",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+      testIgnore: /admin\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: SHOP_URL,
+        viewport: { width: 1440, height: 900 },
+      },
     },
     {
       name: "mobile-chromium",
-      use: { ...devices["Pixel 7"] },
+      testIgnore: /admin\.spec\.ts/,
+      use: { ...devices["Pixel 7"], baseURL: SHOP_URL },
+    },
+    {
+      name: "admin",
+      testMatch: /admin\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: ADMIN_URL,
+        viewport: { width: 1440, height: 900 },
+      },
     },
   ],
 
-  webServer: {
-    command:
-      'node node_modules/next/dist/bin/next build && node node_modules/next/dist/bin/next start --port ' +
-      PORT,
-    url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 240_000,
-    stdout: "pipe",
-    stderr: "pipe",
-  },
+  webServer: [
+    {
+      command: next + " build && " + next + " start --port " + SHOP_PORT,
+      url: SHOP_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+    {
+      command: next + " dev --port " + ADMIN_PORT,
+      url: ADMIN_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      // Its own build directory: sharing .next with the production server
+      // above means the dev server overwrites the build being served.
+      env: { NEXT_DIST_DIR: ".next-dev" },
+    },
+  ],
 });

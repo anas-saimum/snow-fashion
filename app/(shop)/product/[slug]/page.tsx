@@ -20,12 +20,23 @@ export async function generateStaticParams() {
 }
 
 /**
- * Unknown slugs must answer with a real 404 status rather than a 200 carrying
- * 404 content, which search engines treat as a soft 404. Set this to true when
- * products can be published between deployments, and keep the notFound() call
- * below so the status is still correct.
+ * A genuine trade-off, and Next requires a literal here so it cannot follow
+ * the backend:
+ *
+ *  * true  — a product created after the last deploy is not in
+ *            generateStaticParams, but still resolves. Required for the admin
+ *            dashboard to be of any use.
+ *  * false — an unknown slug answers with a real 404 *status* instead of a 200
+ *            carrying 404 content (a "soft 404"), but anything added after the
+ *            build 404s until the next one.
+ *
+ * We choose true: a working dashboard beats a status code on URLs that nothing
+ * links to. The cost is contained — the 404 page is noindex, so it will not be
+ * indexed, and the sitemap lists only real products. Unknown *category* URLs
+ * still get a hard 404, because that list is static and middleware can check
+ * it for free (see middleware.ts).
  */
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 export async function generateMetadata({
   params,

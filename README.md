@@ -27,8 +27,8 @@ Requires Node.js 20 or newer (developed against 24 LTS).
 | `npm start` | Serve the production build |
 | `npm run lint` | ESLint, including `jsx-a11y` rules |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest unit tests (82) |
-| `npm run test:e2e` | Playwright e2e, desktop + mobile (151) |
+| `npm test` | Vitest unit tests (115) |
+| `npm run test:e2e` | Playwright e2e: storefront (desktop + mobile) and admin (170) |
 
 ---
 
@@ -139,6 +139,116 @@ Two caveats worth knowing:
 | Categories | `data/categories.ts` |
 | Collections | `data/collections.ts` |
 | Size charts | `data/size-guides.ts` |
+
+---
+
+## Admin dashboard
+
+A back office at `/admin` for the catalogue: sign in, add and edit products,
+set prices and discounts, manage colours, sizes and per-variant stock, upload
+photography, and publish or unpublish. It has its own chrome — no shop header,
+no cart drawer — and is `noindex, nofollow` throughout.
+
+### Why it needs a database
+
+The storefront is happy reading `data/products.ts`, a file compiled into the
+build. An admin that *writes* is a different problem: Vercel's filesystem is
+read-only and every request may reach a different instance, so an edit has
+nowhere to go. Product photography has the same problem.
+
+So the dashboard runs in one of three modes, and it tells you which:
+
+| Mode | When | Behaviour |
+|---|---|---|
+| **supabase** | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set | Real and durable. Sign-in required. |
+| **memory** | No config, `next dev` | Full dashboard against an in-memory copy of the demo catalogue. No sign-in, and a red banner says edits vanish on restart. This is how the admin was built and is tested. |
+| **read-only** | No config, production | Storefront works on demo data; `/admin` refuses to load and explains why. Better than an editor that appears to save and silently discards. |
+
+### Setting up Supabase
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In **SQL Editor → New query**, run `supabase/migrations/0001_catalogue.sql`,
+   then `supabase/migrations/0002_upsert_product.sql`. Both are idempotent.
+3. In **Authentication → Users**, add a user with your email and a password.
+4. Back in the SQL editor, make that user an admin:
+
+   ```sql
+   insert into public.admins (user_id, email)
+   select id, email from auth.users where email = 'you@example.com';
+   ```
+
+5. From **Project Settings → API**, copy the URL and the `anon` key into
+   `.env.local`:
+
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   ```
+
+6. Add the same two variables in Vercel and redeploy.
+7. Open `/admin`, sign in, and use **Import demo catalogue** on the overview
+   to load the 37 demo products — a new project starts empty, which would
+   otherwise leave the shop looking broken.
+
+The `anon` key is safe in the browser: it is public by design, and row-level
+security is what protects the data. Never put the **service role** key in this
+project — nothing here needs it.
+
+### How access control works
+
+Two independent gates, so neither is a single point of failure:
+
+* **Middleware** refreshes the session and redirects anonymous visitors away
+  from `/admin`. Authentication only.
+* **The admin layout** then checks the user has a row in `admins`. Being able
+  to sign in is not the same as being allowed to edit — a customer account
+  reaching `/admin` gets nothing.
+* **Row-level security** enforces the same rule in Postgres. Even a leaked
+  session with no `admins` row cannot read a draft or write a product. Writes
+  go through the `upsert_product` function, which re-checks admin status
+  itself.
+
+### Saving is atomic
+
+A product touches six tables (product, categories, colours, sizes, images,
+variants). Doing that as six client calls means no transaction: a failure
+between deleting the old variants and inserting the new ones leaves a live
+product with no stock rows — unbuyable, silently. All of it happens inside the
+`upsert_product` Postgres function instead, so a save either lands completely
+or not at all.
+
+### Caches are cleared on save
+
+Storefront reads are cached (`unstable_cache`, tagged `products`). Every
+mutating action calls `revalidateStorefront()`, which drops that tag and the
+affected pages, so a price change is visible on the shop immediately rather
+than whenever the cache happened to expire.
+
+### One trade-off worth knowing
+
+`/product/[slug]` sets `dynamicParams = true`. Products created after a
+deploy are not in `generateStaticParams`, and without this they would 404
+until the next build — which would make the dashboard pointless. The cost is
+that an unknown product URL renders the 404 page at HTTP 200 rather than 404.
+That page is `noindex` and the sitemap lists only real products, so it will
+not be indexed. Unknown *category* URLs still get a hard 404, because that
+list is static and middleware can check it for nothing.
+
+### What the dashboard does not do yet
+
+Deliberately out of scope for this phase, and not stubbed out in the UI:
+
+* **Orders, sales figures and invoices.** Orders still live in the customer's
+  browser (see [What is deliberately stubbed](#what-is-deliberately-stubbed)).
+  Moving them into Postgres is the next phase, and is also what unlocks
+  server-side price validation before any payment can be taken.
+* **Categories and collections** are still edited in `data/`. The dashboard
+  reads them.
+* **Contact details, shipping rates and social handles** remain in `config/`.
+  The settings page shows the current values rather than offering inputs that
+  do nothing.
+* **Multiple staff accounts and roles.** The `admins` table is ready for more
+  than one row; there is no UI for it and no permission tiers.
 
 ---
 
