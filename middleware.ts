@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { categorySlugs } from "@/data/category-slugs";
+import {
+  ADMIN_SESSION_COOKIE,
+  getLocalAuthConfig,
+  verifySessionToken,
+  type LocalAuthConfig,
+} from "@/lib/admin/local-auth";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
 
 /**
@@ -12,10 +18,12 @@ import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/config";
  *    as a 200. That is a "soft 404": 404 content served with a success status,
  *    which search engines treat as a thin duplicate rather than a dead page.
  *
- * 2. Refresh the Supabase session cookie and keep unauthenticated visitors
- *    out of /admin. Authentication only — whether the signed-in user is
- *    actually an admin is checked in the admin layout against the `admins`
- *    table, so a stolen session still cannot edit anything.
+ * 2. Keep unauthenticated visitors out of /admin. With Supabase, this also
+ *    refreshes the session cookie. Authentication only — whether the
+ *    signed-in user is actually an admin is checked in the admin layout
+ *    against the `admins` table, so a stolen session still cannot edit
+ *    anything. Without Supabase, a login ID and password from the
+ *    environment sign a cookie that is verified here.
  */
 
 function guardCategory(request: NextRequest): NextResponse | null {
@@ -30,17 +38,22 @@ function guardCategory(request: NextRequest): NextResponse | null {
   return null;
 }
 
-async function guardAdmin(request: NextRequest): Promise<NextResponse> {
-  // Without a backend there is no session to check. The admin layout refuses
-  // to load in production, and in development it runs in a clearly labelled
-  // in-memory demo mode.
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.next({ request });
-  }
+/** Sends an anonymous visitor to the login page, remembering where they were headed. */
+function redirectToLogin(request: NextRequest): NextResponse {
+  const { pathname, search } = request.nextUrl;
+  const login = new URL("/admin/login", request.url);
+  if (pathname !== "/admin") login.searchParams.set("next", pathname + search);
+  return NextResponse.redirect(login);
+}
 
+async function guardWithSupabase(
+  request: NextRequest,
+  url: string,
+  anonKey: string,
+): Promise<NextResponse> {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -62,21 +75,51 @@ async function guardAdmin(request: NextRequest): Promise<NextResponse> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname, search } = request.nextUrl;
-  const isLoginPage = pathname === "/admin/login";
+  const isLoginPage = request.nextUrl.pathname === "/admin/login";
 
-  if (!user && !isLoginPage) {
-    const login = new URL("/admin/login", request.url);
-    // Remember where they were headed so login can return them there.
-    if (pathname !== "/admin") login.searchParams.set("next", pathname + search);
-    return NextResponse.redirect(login);
-  }
+  if (!user && !isLoginPage) return redirectToLogin(request);
 
   if (user && isLoginPage) {
     return NextResponse.redirect(new URL("/admin", request.url));
   }
 
   return response;
+}
+
+async function guardWithCredentials(
+  request: NextRequest,
+  config: LocalAuthConfig,
+): Promise<NextResponse> {
+  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  const session = await verifySessionToken(config, token);
+  const isLoginPage = request.nextUrl.pathname === "/admin/login";
+
+  if (!session && !isLoginPage) {
+    const response = redirectToLogin(request);
+    // A cookie that failed verification is worthless; drop it.
+    if (token) response.cookies.delete(ADMIN_SESSION_COOKIE);
+    return response;
+  }
+
+  if (session && isLoginPage) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
+  return NextResponse.next({ request });
+}
+
+async function guardAdmin(request: NextRequest): Promise<NextResponse> {
+  if (supabaseUrl && supabaseAnonKey) {
+    return guardWithSupabase(request, supabaseUrl, supabaseAnonKey);
+  }
+
+  const local = getLocalAuthConfig();
+  if (local) return guardWithCredentials(request, local);
+
+  // No credentials of any kind. The admin layout refuses to load in
+  // production, and in development it runs in a clearly labelled in-memory
+  // demo mode.
+  return NextResponse.next({ request });
 }
 
 export async function middleware(request: NextRequest) {

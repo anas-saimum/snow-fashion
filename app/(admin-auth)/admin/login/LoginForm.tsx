@@ -7,31 +7,47 @@ import { Button } from "@/components/ui/Button";
 import { signInAction } from "@/app/admin/actions";
 import { isEmail } from "@/lib/validation/forms";
 
-export function LoginForm({ nextPath }: { nextPath?: string }) {
+interface LoginFormProps {
+  nextPath?: string;
+  /**
+   * Supabase accounts are addressed by email; the environment-variable
+   * admin has a free-form login ID. The form only changes its label and
+   * validation — the action decides what to check the values against.
+   */
+  method: "supabase" | "local";
+}
+
+export function LoginForm({ nextPath, method }: LoginFormProps) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [fieldErrors, setFieldErrors] = useState<{
-    email?: string;
+    identifier?: string;
     password?: string;
   }>({});
   const [pending, startTransition] = useTransition();
+
+  const byEmail = method === "supabase";
+  const idLabel = byEmail ? "Email" : "Login ID";
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(undefined);
 
     const next: typeof fieldErrors = {};
-    if (!email.trim()) next.email = "Enter your email address.";
-    else if (!isEmail(email)) next.email = "That does not look like an email address.";
+    if (!identifier.trim()) {
+      next.identifier = byEmail ? "Enter your email address." : "Enter your login ID.";
+    } else if (byEmail && !isEmail(identifier)) {
+      next.identifier = "That does not look like an email address.";
+    }
     if (!password) next.password = "Enter your password.";
 
     setFieldErrors(next);
-    if (next.email || next.password) return;
+    if (next.identifier || next.password) return;
 
     startTransition(async () => {
-      const result = await signInAction(email, password);
+      const result = await signInAction(identifier, password);
 
       if (!result.ok) {
         setError(result.message);
@@ -51,18 +67,21 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
   return (
     <form onSubmit={onSubmit} noValidate className="mt-7 flex flex-col gap-5">
       <Input
-        label="Email"
-        name="email"
-        type="email"
+        label={idLabel}
+        name={byEmail ? "email" : "username"}
+        type={byEmail ? "email" : "text"}
         autoComplete="username"
+        autoCapitalize="none"
+        spellCheck={false}
         autoFocus
         required
-        value={email}
+        value={identifier}
         onChange={(event) => {
-          setEmail(event.target.value);
-          if (fieldErrors.email) setFieldErrors((f) => ({ ...f, email: undefined }));
+          setIdentifier(event.target.value);
+          if (fieldErrors.identifier)
+            setFieldErrors((f) => ({ ...f, identifier: undefined }));
         }}
-        error={fieldErrors.email}
+        error={fieldErrors.identifier}
       />
 
       <Input

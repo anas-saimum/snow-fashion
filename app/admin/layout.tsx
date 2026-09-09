@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { resolveAdminAccess } from "@/lib/admin/guard";
+import { needsSignIn, resolveAdminAccess } from "@/lib/admin/guard";
 
 /**
  * Never prerender the dashboard. It is per-session by nature, and at build
@@ -21,25 +21,31 @@ export const metadata: Metadata = {
  * Gate for everything under /admin.
  *
  * Middleware has already bounced unauthenticated visitors, so the job here is
- * authorisation: a valid session is not enough, the user must be listed in the
- * `admins` table. RLS enforces the same rule at the database, so this is the
- * friendly layer rather than the only one.
+ * authorisation. With Supabase, a valid session is not enough: the user must
+ * be listed in the `admins` table, and RLS enforces the same rule at the
+ * database, so this is the friendly layer rather than the only one. With the
+ * environment-variable login, this re-checks the signed cookie so a page can
+ * never render without it even if the middleware matcher were misconfigured.
  */
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const access = await resolveAdminAccess();
 
+  if (needsSignIn(access)) {
+    redirect("/admin/login");
+  }
+
   if (access.mode === "read-only") {
     return <NoBackend />;
   }
 
-  if (access.mode === "supabase" && !access.session) {
-    redirect("/admin/login");
-  }
-
   return (
-    <AdminShell mode={access.mode} email={access.session?.email}>
+    <AdminShell
+      mode={access.mode}
+      email={access.session?.email}
+      canSignOut={access.auth !== "none"}
+    >
       {children}
     </AdminShell>
   );

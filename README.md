@@ -160,9 +160,44 @@ So the dashboard runs in one of three modes, and it tells you which:
 
 | Mode | When | Behaviour |
 |---|---|---|
-| **supabase** | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set | Real and durable. Sign-in required. |
-| **memory** | No config, `next dev` | Full dashboard against an in-memory copy of the demo catalogue. No sign-in, and a red banner says edits vanish on restart. This is how the admin was built and is tested. |
+| **supabase** | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set | Real and durable. Sign-in with a Supabase account required. |
+| **memory** | No config, `next dev` | Full dashboard against an in-memory copy of the demo catalogue. A red banner says edits vanish on restart. This is how the admin was built and is tested. |
 | **read-only** | No config, production | Storefront works on demo data; `/admin` refuses to load and explains why. Better than an editor that appears to save and silently discards. |
+
+### Admin login ID and password (no database needed)
+
+Sign-in and storage are separate. Without Supabase, `/admin` is open in
+development and unavailable in production — unless you give it credentials:
+
+```
+ADMIN_LOGIN_ID=admin
+ADMIN_PASSWORD=<long random password>
+ADMIN_SESSION_SECRET=<random string, optional>
+```
+
+Put those in `.env.local` (git-ignored) and in your host's environment
+variables. `/admin` then redirects anonymous visitors to `/admin/login`, where
+the login ID and password are checked server-side with constant-time
+comparisons; a successful sign-in sets an HMAC-signed, `httpOnly` cookie that
+lasts seven days and is verified by the middleware on every admin request.
+Changing the password (or the secret) signs every session out. **Sign out** is
+in the sidebar.
+
+Generate a secret with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+Two things to know. There is one account, with no roles and no lockout after
+failed attempts, so the password must be long and random. And this is sign-in
+only: without Supabase, storage is still the memory or read-only mode above,
+so a signed-in admin in production sees the "needs a database" page rather
+than an editor.
+
+When Supabase is configured, its accounts and the `admins` table are used
+instead and these variables are ignored — row-level security needs a real
+Supabase session to allow writes.
 
 ### Setting up Supabase
 
@@ -198,8 +233,9 @@ project — nothing here needs it.
 
 Two independent gates, so neither is a single point of failure:
 
-* **Middleware** refreshes the session and redirects anonymous visitors away
-  from `/admin`. Authentication only.
+* **Middleware** redirects anonymous visitors away from `/admin` (and, with
+  Supabase, refreshes the session). Authentication only. With the
+  environment-variable login it verifies the signed cookie itself.
 * **The admin layout** then checks the user has a row in `admins`. Being able
   to sign in is not the same as being allowed to edit — a customer account
   reaching `/admin` gets nothing.

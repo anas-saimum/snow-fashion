@@ -7,6 +7,11 @@ import {
   describeError,
   type ActionResult,
 } from "@/lib/admin/actions-result";
+import {
+  authMode,
+  clearLocalSession,
+  signInWithCredentials,
+} from "@/lib/admin/auth";
 import { assertCanWrite } from "@/lib/admin/guard";
 import { importDemoCatalogue } from "@/lib/admin/import-demo";
 import { revalidateAdmin, revalidateStorefront } from "@/lib/admin/revalidate";
@@ -18,7 +23,6 @@ import {
   adminSettingsRepository,
   requireAdminProductRepository,
 } from "@/lib/repositories";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ProductStatus } from "@/types";
 import type { ProductInput } from "@/types/admin";
@@ -164,19 +168,28 @@ export async function saveLogoAction(
  * -------------------------------------------------------------------------- */
 
 export async function signInAction(
-  email: string,
+  identifier: string,
   password: string,
 ): Promise<ActionResult> {
-  if (!isSupabaseConfigured) {
+  if (authMode === "local") {
+    const ok = await signInWithCredentials(identifier, password);
+    // Deliberately vague: saying which half was wrong helps a guesser.
+    return ok
+      ? actionOk(undefined, "Signed in.")
+      : actionFailed("That login ID and password combination is not recognised.");
+  }
+
+  if (authMode !== "supabase") {
     return actionFailed(
-      "Authentication is not configured. Connect Supabase to enable sign-in.",
+      "Authentication is not configured. Set ADMIN_LOGIN_ID and ADMIN_PASSWORD, " +
+        "or connect Supabase, to enable sign-in.",
     );
   }
 
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
+    email: identifier.trim(),
     password,
   });
 
@@ -204,9 +217,11 @@ export async function signInAction(
 }
 
 export async function signOutAction(): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (authMode === "supabase") {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.signOut();
+  } else if (authMode === "local") {
+    await clearLocalSession();
   }
   redirect("/admin/login");
 }

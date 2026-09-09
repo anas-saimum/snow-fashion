@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./LoginForm";
 import { Logo } from "@/components/layout/Logo";
-import { persistenceMode } from "@/lib/repositories";
-import { getAdminSession } from "@/lib/supabase/session";
+import { authMode, getAdminSession } from "@/lib/admin/auth";
 
 /** Reads the current session, so it can never be prerendered. */
 export const dynamic = "force-dynamic";
@@ -24,9 +23,10 @@ export default async function AdminLoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
-  // Without Supabase there is no auth to perform; the dashboard runs in
-  // labelled demo mode instead of pretending to have accounts.
-  if (persistenceMode !== "supabase") {
+  // Nothing to sign in with: no Supabase and no ADMIN_LOGIN_ID/PASSWORD. The
+  // dashboard runs in labelled demo mode instead of pretending to have
+  // accounts.
+  if (authMode === "none") {
     redirect("/admin");
   }
 
@@ -49,12 +49,13 @@ export default async function AdminLoginPage({
             not yet available.
           </p>
 
-          <LoginForm nextPath={next} />
+          <LoginForm nextPath={next} method={authMode} />
         </div>
 
         <p className="mt-6 text-center text-micro leading-relaxed text-muted">
-          Forgotten the password? Reset it from the Authentication section of
-          your Supabase dashboard — there is no self-service reset here yet.
+          {authMode === "supabase"
+            ? "Forgotten the password? Reset it from the Authentication section of your Supabase dashboard — there is no self-service reset here yet."
+            : "Forgotten the password? The site owner sets it in the server's environment variables — there is no self-service reset."}
         </p>
       </div>
     </div>

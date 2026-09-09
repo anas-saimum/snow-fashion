@@ -1,8 +1,13 @@
 import { persistenceMode } from "@/lib/repositories";
-import { getAdminSession, type AdminSession } from "@/lib/supabase/session";
+import type { PersistenceMode } from "@/lib/repositories/admin.repository";
+import type { AdminSession } from "@/lib/supabase/session";
+import { authMode, getAdminSession, type AuthMode } from "./auth";
 
 export interface AdminAccess {
-  mode: typeof persistenceMode;
+  /** Where edits are stored. */
+  mode: PersistenceMode;
+  /** How staff sign in. */
+  auth: AuthMode;
   session: AdminSession | null;
   /** True when writes will actually persist somewhere durable. */
   durable: boolean;
@@ -11,39 +16,44 @@ export interface AdminAccess {
 /**
  * Resolves who is allowed to do what, for both pages and actions.
  *
- *  * supabase  — a real session in the `admins` table is required.
- *  * memory    — development only. No auth backend exists, so the dashboard
- *                runs unauthenticated and says so loudly. Never reachable in
- *                production; see lib/repositories/index.ts.
- *  * read-only — no backend at all. Refuse, rather than offer an editor that
- *                silently discards everything.
+ * Storage and sign-in are independent axes:
+ *
+ *  * supabase storage always comes with Supabase sign-in — a real session in
+ *    the `admins` table is required.
+ *  * memory / read-only storage may still be behind a sign-in if
+ *    ADMIN_LOGIN_ID and ADMIN_PASSWORD are set. Without those, development
+ *    runs unauthenticated and says so loudly, and production refuses to
+ *    offer an editor that silently discards everything.
  */
 export async function resolveAdminAccess(): Promise<AdminAccess> {
-  if (persistenceMode === "supabase") {
-    const session = await getAdminSession();
-    return { mode: "supabase", session, durable: true };
-  }
+  const session = authMode === "none" ? null : await getAdminSession();
 
-  if (persistenceMode === "memory") {
-    return { mode: "memory", session: null, durable: false };
-  }
+  return {
+    mode: persistenceMode,
+    auth: authMode,
+    session,
+    durable: persistenceMode === "supabase",
+  };
+}
 
-  return { mode: "read-only", session: null, durable: false };
+/** True when a sign-in is configured but this request has none. */
+export function needsSignIn(access: AdminAccess): boolean {
+  return access.auth !== "none" && !access.session;
 }
 
 /** For Server Actions: throws unless the caller may write. */
 export async function assertCanWrite(): Promise<AdminAccess> {
   const access = await resolveAdminAccess();
 
+  if (needsSignIn(access)) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
   if (access.mode === "read-only") {
     throw new Error(
       "No writable backend is configured, so nothing can be saved. " +
         "Connect Supabase first — see README → Admin dashboard.",
     );
-  }
-
-  if (access.mode === "supabase" && !access.session) {
-    throw new Error("Your session has expired. Please sign in again.");
   }
 
   return access;

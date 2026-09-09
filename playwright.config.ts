@@ -68,9 +68,16 @@ export default defineConfig({
       timeout: 120_000,
       stdout: "pipe",
       stderr: "pipe",
-      // Its own build directory: sharing .next with the production server
-      // above means the dev server overwrites the build being served.
-      env: { NEXT_DIST_DIR: ".next-dev" },
+      env: {
+        // Its own build directory: sharing .next with the production server
+        // above means the dev server overwrites the build being served.
+        NEXT_DIST_DIR: ".next-dev",
+        // The suite drives the open demo-mode dashboard. An empty value is
+        // "already set" to Next's env loader, so a developer's .env.local
+        // credentials cannot put a login page in front of the tests.
+        ADMIN_LOGIN_ID: "",
+        ADMIN_PASSWORD: "",
+      },
     },
   ],
 });

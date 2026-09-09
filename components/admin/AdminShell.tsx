@@ -25,7 +25,10 @@ const NAV = [
 
 interface AdminShellProps {
   mode: PersistenceMode;
+  /** Who is signed in: an email (Supabase) or a login ID (environment). */
   email?: string;
+  /** False in the unauthenticated development demo, where there is no session to end. */
+  canSignOut?: boolean;
   children: ReactNode;
 }
 
@@ -36,7 +39,12 @@ interface AdminShellProps {
  * back office, and it should not be mistaken for a customer-facing page —
  * but built from the same tokens so it still looks like the same company.
  */
-export function AdminShell({ mode, email, children }: AdminShellProps) {
+export function AdminShell({
+  mode,
+  email,
+  canSignOut = false,
+  children,
+}: AdminShellProps) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -120,7 +128,7 @@ export function AdminShell({ mode, email, children }: AdminShellProps) {
               View store
             </a>
 
-            {mode === "supabase" && (
+            {canSignOut && (
               <form action={signOutAction}>
                 <button
                   type="submit"
